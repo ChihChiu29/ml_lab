@@ -94,7 +94,6 @@ def CreateConvolutionModel(
     activation: t.Text = 'relu',
     optimizer: optimizers.Optimizer = None,
 ) -> keras.Model:
-  """Creates a convolution model suitable for screen based learning."""
   if optimizer is None:
     optimizer = CreateDefaultOptimizer()
 
