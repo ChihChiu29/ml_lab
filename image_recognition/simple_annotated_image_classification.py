@@ -10,14 +10,16 @@ from keras import layers
 from keras import models
 from keras import optimizers
 from matplotlib import pyplot as plt
+from sklearn import metrics
 
 from qpylib import logging
 from qpylib import t
 
 IMAGE_SIZE = 128
 
-# Image array is a 2d float array; its 1st dimention is y and 2nd dimension
-# is x. This convention is chosen to match pyplot.imshow.
+# Image array is a 3d float array; its 1st dimension is y and 2nd dimension
+# is x, and 3rd dimension has size 1 and it is the grey scale. This convention
+# is chosen to match pyplot.imshow.
 Image = numpy.array
 
 
@@ -26,7 +28,16 @@ def CreateBlankImage(
     width: int,
 ) -> Image:
   """Creates a blank (0) image."""
-  return numpy.zeros((width, height), dtype=float)
+  return numpy.zeros((width, height, 1), dtype=float)
+
+
+def CreateBlankImageWithNoise(
+    height: int,
+    width: int,
+    noise_strength: float = 0.1,
+) -> Image:
+  """Creates a almost blank (0) image."""
+  return numpy.random.uniform(0.0, noise_strength, (width, height, 1))
 
 
 def AddBoxToImage(img: Image, y: int, x: int, size: int = 5):
@@ -55,10 +66,10 @@ def CreateImageData(
 
   for _ in range(num_blank_images):
     images_and_labels.append(
-      (CreateBlankImage(height, width), numpy.array([1.0, 0.0])))
+      (CreateBlankImageWithNoise(height, width), numpy.array([1.0, 0.0])))
 
   for _ in range(num_annotated_images):
-    img = CreateBlankImage(height, width)
+    img = CreateBlankImageWithNoise(height, width)
     AddBoxToImage(
       img,
       y=numpy.random.randint(0, height - 1),
@@ -79,7 +90,7 @@ def CreateDefaultOptimizer() -> optimizers.Optimizer:
 
 
 def CreateConvolutionModel(
-    image_shape: t.Tuple[int, int],
+    image_shape: t.Tuple[int, int, int],
     activation: t.Text = 'relu',
     optimizer: optimizers.Optimizer = None,
 ) -> keras.Model:
@@ -89,15 +100,14 @@ def CreateConvolutionModel(
 
   model = models.Sequential()
   model.add(layers.Conv2D(
-    16, (8, 8),
-    strides=(4, 4),
+    16,
+    kernel_size=4,
     activation=activation,
     input_shape=image_shape,
-    data_format='channels_first'))
+  ))
   model.add(layers.Conv2D(
     16,
-    (4, 4),
-    strides=(2, 2),
+    kernel_size=4,
     activation=activation))
   model.add(layers.Flatten())
   model.add(layers.Dense(units=2))
@@ -107,21 +117,37 @@ def CreateConvolutionModel(
   return model
 
 
+def PlotImage(img: Image):
+  y_size, x_size, _ = img.shape
+  plt.imshow(img.reshape(y_size, x_size))
+  plt.show()
+
+
 def MainTest():
   images, labels = CreateImageData(num_blank_images=5, num_annotated_images=5)
-  print(images.shape)
-  print(labels.shape)
   for idx in range(5):
     logging.printf('Label %d: %s', idx, labels[idx])
-    plt.imshow(images[idx])
-    plt.show()
+    PlotImage(images[idx])
 
 
 def MainTrain():
-  images, labels = CreateImageData(num_blank_images=5, num_annotated_images=5)
-  model = CreateConvolutionModel((IMAGE_SIZE, IMAGE_SIZE))
+  images, labels = CreateImageData(
+    num_blank_images=5000,
+    num_annotated_images=5000,
+  )
+  model = CreateConvolutionModel((IMAGE_SIZE, IMAGE_SIZE, 1))
   model.fit(images, labels)
+
+  images, labels = CreateImageData(
+    num_blank_images=50,
+    num_annotated_images=50,
+  )
+  labels_argmax = labels.argmax(axis=1)
+  predicted_labels = model.predict(images)
+  predicted_labels_argmax = predicted_labels.argmax(axis=1)
+  print(metrics.confusion_matrix(predicted_labels_argmax, labels_argmax))
 
 
 if __name__ == '__main__':
+  # MainTest()
   MainTrain()
